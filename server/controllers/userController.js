@@ -130,8 +130,48 @@ export const updatePassword = async (req, res) => {
     }
     user.password = await bcrypt.hash(newPassword, 10);
     await user.save();
-    res.json({
+    res.status(200).json({
       message: 'Password Updated',
+    });
+  } catch (err) {
+    return res.status(500).json({
+      message: err.message,
+    });
+  }
+};
+
+// to get all users
+export const getAllUsers = async (req, res) => {
+  try {
+    const search = req.query.search || '';
+    const { page = 1, limit = 20 } = req.query;
+    const skip = (page - 1) * limit;
+
+    const users = await User.find({
+      $or: [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+      ],
+      _id: { $ne: req.user._id },
+    })
+      .select('-password')
+      .sort({ name: 1 })
+      .skip(skip)
+      .limit(limit);
+
+    const totalUsers = await User.countDocuments({
+      $or: [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+      ],
+      _id: { $ne: req.user._id },
+    });
+
+    res.json({
+      users,
+      totalUsers,
+      totalPages: Math.ceil(totalUsers / limit),
+      currentPage: page,
     });
   } catch (err) {
     return res.status(500).json({

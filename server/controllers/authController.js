@@ -16,7 +16,7 @@ export const registerUser = async (req, res) => {
     }
     let user = await User.findOne({ email });
     if (user) {
-      return res.status(400).json({
+      return res.status(409).json({
         message: 'User Already Exist',
       });
     }
@@ -63,11 +63,11 @@ export const loginUser = async (req, res) => {
       });
     const comparePassword = await bcrypt.compare(password, user.password);
     if (!comparePassword)
-      return res.status(400).json({
+      return res.status(404).json({
         message: 'Invalid Credentials',
       });
     generateToken(user._id, res);
-    res.status(201).json({
+    return res.status(201).json({
       message: 'User Logged in',
       user,
     });
@@ -81,7 +81,7 @@ export const loginUser = async (req, res) => {
 export const logoutUser = (req, res) => {
   try {
     res.cookie('token', '', { maxAge: 0 });
-    res.json({
+    res.status(200).json({
       message: 'Logged Out Successfully',
     });
   } catch (err) {

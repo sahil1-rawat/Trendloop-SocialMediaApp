@@ -61,8 +61,6 @@ export const getAllMessages = async (req, res) => {
     if (!id) {
       return res.status(400).json({ message: 'Recipient ID is required' });
     }
-
-    // Sort users for consistent query
     const sortedUsers = [userId, id].sort();
 
     // Find chat
@@ -70,9 +68,8 @@ export const getAllMessages = async (req, res) => {
     if (!chat) {
       return res.status(404).json({ message: 'No chat found' });
     }
-
-    // Pagination setup
-    const { page = 1, limit = 20 } = req.query; // Default to page 1, 20 messages per page
+    // Default to page 1, 20 messages per page
+    const { page = 1, limit = 20 } = req.query;
     const skip = (page - 1) * limit;
 
     // Fetch messages with pagination
@@ -95,26 +92,32 @@ export const getAllMessages = async (req, res) => {
   }
 };
 
-// get chat messages
+// to get all chat of user
 
 export const getChatMessages = async (req, res) => {
   try {
-    // Check if user is authenticated
     if (!req.user || !req.user._id) {
-      return res.status(400).json({
+      return res.status(403).json({
         message: 'User not authenticated',
       });
     }
 
-    // Pagination setup
     const { page = 1, limit = 20 } = req.query; // Default to page 1 and 20 chats per page
     const skip = (page - 1) * limit;
 
     // Fetch the chats for the logged-in user
     const chats = await Chat.find({ users: req.user._id })
       .skip(skip)
-      .limit(parseInt(limit));
-
+      .limit(parseInt(limit))
+      .populate({
+        path: 'users',
+        select: 'name profilePic',
+      });
+    chats.forEach((e) => {
+      e.users = e.users.filter(
+        (user) => user._id.toString() !== req.user._id.toString()
+      );
+    });
     if (!chats || chats.length === 0) {
       return res.status(404).json({
         message: 'No chats found for this user',

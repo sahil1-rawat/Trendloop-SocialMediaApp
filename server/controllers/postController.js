@@ -7,31 +7,36 @@ export const newPost = async (req, res) => {
   try {
     const { caption } = req.body;
     const ownerId = req.user._id;
-    const file = req.file;
-    const fileUrl = getDataUrl(file);
-    let option;
+    const files = req.files; // Expecting an array of files now
+    const fileUrls = files.map((file) => getDataUrl(file)); // Convert each file to data URL
+
+    let options = [];
     const type = req.query.type;
 
     if (type === 'reel') {
-      option = {
-        resource_type: 'video',
-      };
+      options = files.map(() => ({ resource_type: 'video' }));
     } else {
-      option = {};
+      options = files.map(() => ({})); // For other types, default options can be used
     }
-    const myCloud = await cloudinary.v2.uploader.upload(
-      fileUrl.content,
-      option
+
+    // Upload all files to Cloudinary
+    const uploadedFiles = await Promise.all(
+      files.map((file, index) =>
+        cloudinary.v2.uploader.upload(fileUrls[index].content, options[index])
+      )
     );
+
+    // Save the post details with all uploaded files
     const post = await Post.create({
       caption,
-      post: {
-        id: myCloud.public_id,
-        url: myCloud.secure_url,
-      },
+      post: uploadedFiles.map((file) => ({
+        id: file.public_id,
+        url: file.secure_url,
+      })),
       owner: ownerId,
       type,
     });
+
     res.status(201).json({
       message: 'Post Created',
       post,
@@ -42,7 +47,6 @@ export const newPost = async (req, res) => {
     });
   }
 };
-
 // delete Post
 export const deletePost = async (req, res) => {
   try {
@@ -53,14 +57,15 @@ export const deletePost = async (req, res) => {
       });
     }
     if (req.user._id.toString() !== post.owner.toString()) {
-      return res.status(404).json({
+      return res.status(403).json({
         message: 'Unauthorized User',
       });
     }
-
-    await cloudinary.v2.uploader.destroy(post.post.id);
+    for (let file of post.post) {
+      await cloudinary.v2.uploader.destroy(file.id);
+    }
     await post.deleteOne();
-    return res.status(201).json({
+    return res.status(200).json({
       message: 'Post Deleted',
     });
   } catch (err) {
@@ -88,7 +93,7 @@ export const editCaption = async (req, res) => {
     post.caption = newCaption;
     await post.save();
     console.log(post);
-    return res.status(201).json({
+    return res.status(200).json({
       message: 'Caption Edited',
     });
   } catch (err) {
@@ -131,7 +136,7 @@ export const commentOnPost = async (req, res) => {
       });
     }
     if (!comment || isOnlySpaces(comment)) {
-      return res.status(404).json({
+      return res.status(400).json({
         message: "can't send empty comment",
       });
     }
@@ -163,8 +168,8 @@ export const deleteComment = async (req, res) => {
       });
     }
     if (req.query.commentId) {
-      return res.status(404).json({
-        message: 'Please give comment id',
+      return res.status(400).json({
+        message: 'Please provide a comment id',
       });
     }
 
@@ -172,7 +177,7 @@ export const deleteComment = async (req, res) => {
       (item) => item._id.toString() === req.body.commentId.toString()
     );
     if (commentIndex === -1) {
-      return res.status(400).json({
+      return res.status(404).json({
         message: 'Comment not found',
       });
     }
@@ -187,8 +192,8 @@ export const deleteComment = async (req, res) => {
         message: 'Comment deleted',
       });
     } else {
-      return res.status(400).json({
-        message: 'You are not allowed to delete this comment',
+      return res.status(403).json({
+        message: 'You are not authorized to delete this comment',
       });
     }
   } catch (err) {
@@ -207,21 +212,17 @@ export const likeUnlikePost = async (req, res) => {
         message: 'Post not found',
       });
     }
-    if (post.likes.includes(req.user._id)) {
-      const index = post.likes.indexOf(req.user._id);
-      post.likes.splice(index, 1);
-
-      await post.save();
-      res.json({
-        message: 'Post Unliked',
-      });
+    const { _id } = req.user;
+    const isLiked = post.likes.includes(_id);
+    if (isLiked) {
+      post.likes.pull(_id);
     } else {
-      post.likes.push(req.user._id);
-      await post.save();
-      res.json({
-        message: 'Post liked',
-      });
+      post.likes.push(_id);
     }
+    await post.save();
+    res.status(200).json({
+      message: isLiked ? 'Post Unliked' : 'Post liked',
+    });
   } catch (err) {
     res.status(500).json({
       message: err.message,

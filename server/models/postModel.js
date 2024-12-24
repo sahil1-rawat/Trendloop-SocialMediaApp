@@ -2,10 +2,12 @@ import mongoose from 'mongoose';
 
 const postSchema = new mongoose.Schema({
   caption: String,
-  post: {
-    id: String,
-    url: String,
-  },
+  post: [
+    {
+      id: String,
+      url: String,
+    },
+  ],
   type: {
     type: String,
     required: true,
