@@ -11,11 +11,15 @@ const Account = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState('');
   const [profilePic, setProfilePic] = useState('');
+  const [file, setFile] = useState('');
+
   const navigate = useNavigate();
-
-  // Load saved data from localStorage when the component mounts
-
-  // Update local state when usersData changes
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setIsLoading(false);
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, []);
   useEffect(() => {
     if (usersData) {
       setName(usersData.name || '');
@@ -27,21 +31,45 @@ const Account = () => {
     setIsEditing(!isEditing);
   };
 
-  const handleFormSubmit = (e) => {
-    e.preventDefault();
-    console.log('Updated Name:', name);
-    console.log('Updated Profile Picture:', profilePic);
-    setIsEditing(false);
-  };
-
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
         setProfilePic(reader.result);
+        setFile(file);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const formData = new FormData();
+  formData.append('name', name);
+  formData.append('file', file);
+
+  const handleFormSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(
+        `http://localhost:7000/api/user/${usersData._id}`,
+        {
+          method: 'PUT',
+          credentials: 'include',
+          body: formData,
+        }
+      );
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setUsersData(data.user);
+        setIsEditing(false);
+        toast.success('Profile updated successfully');
+      } else {
+        toast.error(data.message);
+      }
+    } catch (err) {
+      toast.error(err.message);
     }
   };
 
@@ -50,7 +78,9 @@ const Account = () => {
     setProfilePic(usersData.profilePic?.url);
     setIsEditing(false);
   };
-
+  const isSaveDisabled =
+    !name.trim() ||
+    (name === usersData?.name && profilePic === usersData?.profilePic?.url);
   const logoutHandler = async () => {
     try {
       const res = await fetch('http://localhost:7000/api/auth/logout', {
@@ -75,7 +105,6 @@ const Account = () => {
       {isAuth && (
         <div className='bg-gray-100 min-h-screen flex flex-col items-center py-10'>
           <div className='bg-white rounded-xl shadow-lg p-8 w-full max-w-2xl'>
-            {/* Profile Picture Section */}
             <div className='relative flex flex-col items-center mb-6'>
               <img
                 src={profilePic}
@@ -104,7 +133,6 @@ const Account = () => {
               )}
             </div>
 
-            {/* User Details Section */}
             <div className='text-center space-y-4'>
               {isEditing ? (
                 <form
@@ -117,9 +145,15 @@ const Account = () => {
                     className='w-full bg-gray-100 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-400 focus:outline-none text-gray-800 max-w-md'
                     placeholder='Update your name'
                   />
+
                   <button
                     type='submit'
-                    className='bg-green-500 hover:bg-green-600 text-white py-2 px-8 rounded-lg font-medium transition duration-200'>
+                    disabled={isSaveDisabled}
+                    className={`${
+                      isSaveDisabled
+                        ? 'bg-gray-400 cursor-not-allowed'
+                        : 'bg-green-500 hover:bg-green-600'
+                    } text-white py-2 px-8 rounded-lg font-medium transition duration-200`}>
                     Save Changes
                   </button>
                 </form>
@@ -130,8 +164,8 @@ const Account = () => {
                     {usersData.email}
                   </p>
                   <div className='flex justify-center gap-6 text-gray-600'>
-                    <p>{usersData.followers.length} Followers</p>
-                    <p>{usersData.followings.length} Following</p>
+                    <p>{usersData.followers?.length || 0} Followers</p>
+                    <p>{usersData.followings?.length || 0} Following</p>
                   </div>
                 </>
               )}

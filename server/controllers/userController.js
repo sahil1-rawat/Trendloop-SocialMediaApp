@@ -99,6 +99,7 @@ export const updateProfile = async (req, res) => {
       user.name = name;
     }
     const file = req.file;
+
     if (file) {
       const fileUrl = getDataUrl(file);
       await cloudinary.v2.uploader.destroy(user.profilePic.id);
@@ -109,6 +110,7 @@ export const updateProfile = async (req, res) => {
     await user.save();
     res.json({
       message: 'Profile Updated',
+      user,
     });
   } catch (err) {
     return res.status(500).json({
